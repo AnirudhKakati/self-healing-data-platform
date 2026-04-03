@@ -8,3 +8,7 @@ async_session=async_sessionmaker(bind=asyncio_engine,expire_on_commit=False)
 
 class Base(DeclarativeBase):
     pass
+
+async def get_db():
+    async with async_session() as session:
+        yield session
