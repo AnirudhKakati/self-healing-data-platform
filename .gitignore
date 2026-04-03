@@ -1,5 +1,6 @@
+__pycache__/
 data-platform-env/
+*.pyc
 .env
-DATABASE_URL=postgresql://postgres:12345678@localhost:5432/data_platform_db
-REDIS_URL=redis://localhost:6379/0
-ENV=development
+*.egg-info/
+.vscode/
