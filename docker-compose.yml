@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=12345678
+      - POSTGRES_DB=data_platform_db
+    volumes:
+      - pgdata:/var/lib/postgresql
+  
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
+
