@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from config import DATABASE_URL
+from shared.config import DATABASE_URL
 from sqlalchemy.orm import DeclarativeBase
 
 asyncio_engine=create_async_engine(DATABASE_URL)
