@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from control_plane.app.routes.tenants import router as tenant_router
 from control_plane.app.routes.pipelines import router as pipeline_router
+from control_plane.app.routes.pipeline_steps import router as pipeline_step_router
 app=FastAPI()
 
 @app.get("/")
@@ -13,3 +14,4 @@ def get_health():
 
 app.include_router(tenant_router,prefix="/tenants",tags=["Tenants"]) #add the tenants routes
 app.include_router(pipeline_router,prefix="/tenants/{tenant_id}/pipelines",tags=["Pipelines"]) #add the pipelines routes
+app.include_router(pipeline_step_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/steps",tags=["Pipeline_steps"]) #add the pipeline steps routes

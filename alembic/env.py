@@ -9,6 +9,7 @@ from shared.db import Base
 #we import the models here so that alembic can detect it (This is required, even though it may seem like this import isn't used)
 from control_plane.app.models.tenants import Tenant
 from control_plane.app.models.pipelines import Pipeline
+from control_plane.app.models.pipeline_steps import PipelineStep
 from shared.config import DATABASE_URL_SYNC
 
 # this is the Alembic Config object, which provides
