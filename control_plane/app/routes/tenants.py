@@ -47,27 +47,26 @@ async def delete_tenant(tenant_id: int, session: AsyncSession=Depends(get_db)):
     try:
         deleted_rows= await delete_tenant_service(tenant_id,session)
 
-        if deleted_rows==0:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found. Please check the tenant_id")
-        
-        return
-
     except SQLAlchemyError:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error while deleting tenant")
+
+    if deleted_rows==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found. Please check the tenant_id")
+    return
 
 #UPDATE TENANT BY ID
 @router.put("/{tenant_id}", response_model=TenantResponse, status_code=status.HTTP_200_OK)
 async def update_tenant(tenant_id: int, tenant_data: TenantUpdate, session: AsyncSession=Depends(get_db)):
     try:
         tenant=await update_tenant_service(tenant_id,tenant_data,session)
-
-        if not tenant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found. Please check the tenant_id")
-        
-        return tenant
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=str(e))
     except IntegrityError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail="Tenant could not be updated because of a database constraint violation.")
     except SQLAlchemyError:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail="Database error while updating tenant.")
+    
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found. Please check the tenant_id")
+    
+    return tenant
