@@ -10,9 +10,9 @@ class PipelineStep(Base):
     
     id: Mapped[int]=mapped_column(primary_key=True)
     pipeline_id: Mapped[int]=mapped_column(ForeignKey("pipelines.id", ondelete="CASCADE"), index=True)
-    step_type: Mapped[str]=mapped_column(String(50), nullable=False)# The type of step: ingestion, validation, transformation, load, observability. This tells the worker engine what to do at this step
-    step_order: Mapped[int]=mapped_column(Integer, nullable=False) # Execution order within the pipeline
-    config: Mapped[dict | None]=mapped_column(JSON, nullable=True) # Flexible config for the step — e.g., {"source_url": "...", "format": "csv"} for ingestion, {"schema": {...}} for validation, etc.
+    step_type: Mapped[str]=mapped_column(String(50), nullable=False)
+    step_order: Mapped[int]=mapped_column(Integer, nullable=False)
+    config: Mapped[dict | None]=mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime]=mapped_column(server_default=func.now())
     is_active: Mapped[bool]=mapped_column(default=True, nullable=False)
     pipeline=relationship("Pipeline", back_populates="steps")
