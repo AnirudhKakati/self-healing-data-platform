@@ -5,6 +5,7 @@ from control_plane.app.services.pipeline_steps import create_pipeline_step_servi
 from control_plane.app.schemas.pipeline_steps import PipelineStepCreate, PipelineStepUpdate, PipelineStepResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List
+from control_plane.app.exceptions import DuplicateStepOrderError
 
 router=APIRouter()
 
@@ -14,6 +15,8 @@ async def create_pipeline_step(tenant_id: int, pipeline_id: int, step_data: Pipe
 
     try:
         pipeline_step=await create_pipeline_step_service(tenant_id, pipeline_id, step_data, session)
+    except DuplicateStepOrderError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail=str(e))
     except IntegrityError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail="Pipeline step could not be created because of a database constraint violation.")
     except SQLAlchemyError:

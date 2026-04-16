@@ -4,6 +4,7 @@ from control_plane.app.schemas.pipeline_steps import PipelineStepCreate, Pipelin
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import delete, select
+from control_plane.app.exceptions import DuplicateStepOrderError
 
 async def create_pipeline_step_service(tenant_id: int, pipeline_id: int, step_data: PipelineStepCreate, session: AsyncSession):
     #we need to verify the pipeline exists and belongs to this tenant
@@ -12,6 +13,13 @@ async def create_pipeline_step_service(tenant_id: int, pipeline_id: int, step_da
     pipeline = result.scalar_one_or_none()
     if not pipeline:
         return None  # route will handle 404 not found
+
+    # check if step_order already exists for this pipeline
+    existing_step=await session.execute(select(PipelineStep).where(PipelineStep.pipeline_id==pipeline_id,PipelineStep.step_order==step_data.step_order))
+    existing_step=existing_step.scalar_one_or_none()
+    if existing_step:
+        raise DuplicateStepOrderError(f"Step order {step_data.step_order} already exists for this pipeline.")
+
 
     step_dict=step_data.model_dump()
     step_dict["pipeline_id"]=pipeline_id  #inject pipeline_id from the URL, not the body
