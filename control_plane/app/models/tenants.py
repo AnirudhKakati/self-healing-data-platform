@@ -12,3 +12,4 @@ class Tenant(Base):
     is_active: Mapped[bool]=mapped_column(default=True, nullable=False)
 
     pipelines=relationship("Pipeline", back_populates="tenant", cascade="all, delete-orphan")
+    pipeline_runs=relationship("PipelineRun", back_populates="tenant", cascade="all, delete-orphan")
