@@ -4,7 +4,8 @@ from sqlalchemy import select,update
 from control_plane.app.models.pipeline_runs import PipelineRun
 from control_plane.app.models.pipeline_steps import PipelineStep
 from datetime import datetime, timezone
-from worker.app.exceptions import InvalidPipelineRunStatus
+from worker.app.exceptions import InvalidPipelineRunStatus, UnknownStepTypeError
+from worker.app.step_handlers import step_registry
 
 async def run_executor_service(run_id: int):
     async with async_session() as session:
@@ -42,8 +43,13 @@ async def run_executor_service(run_id: int):
 
             for step in pipeline_steps: #for now just print pipeline steps
                 print(f"step_order={step.step_order}, step_type={step.step_type}, config={step.config}")
+                perform_step=step_registry.get(step.step_type)
+                if not perform_step:
+                    raise UnknownStepTypeError(f"Unknown step type: {step.step_type}")
+                perform_step(step.config)
+                
                 # in the future, we might want to update the updated_at field after every step of the pipeline execution
-                # pipeline_run.updated_at=datetime.now(timezone.utc) #updated_at is updated each time a step runs
+                # pipeline_run.updated_at=datetime.now().replace(tzinfo=None) #updated_at is updated each time a step runs
                 # await session.commit()
             
             #update status to success and add the ended_at
@@ -65,7 +71,7 @@ async def run_executor_service(run_id: int):
                 pipeline_run=result.scalar_one_or_none()
 
                 if pipeline_run:
-                    now=datetime.now(timezone.utc)
+                    now=datetime.now().replace(tzinfo=None)
                     pipeline_run.status="failed"
                     pipeline_run.ended_at=now
                     pipeline_run.updated_at=now
