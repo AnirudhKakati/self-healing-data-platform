@@ -1,16 +1,31 @@
-from fastapi import FastAPI, BackgroundTasks, status
 from worker.app.executor import run_executor_service 
-app=FastAPI()
+from shared.redis_client import redis_client
+import asyncio
 
-@app.get("/")
-def get_root():
-    return {"message":"worker app is running!","docs":"/docs"}
+QUEUE_NAME="pipeline_runs"
 
-@app.get("/health")
-def get_health():
-    return {"status": "healthy"}
+async def main():
+    print("Worker is listening for pipeline runs...")
 
-@app.post("/run/{run_id}",status_code=status.HTTP_202_ACCEPTED)
-async def run_executor(run_id: int, background_tasks: BackgroundTasks):
-    background_tasks.add_task(run_executor_service,run_id)
-    return {"run_id":run_id,"status":"accepted"}
+    while True:
+        try:
+            result=await redis_client.blpop(QUEUE_NAME)
+
+            if result is None:
+                continue
+
+            queue_name,value=result
+            run_id=int(value.decode("utf-8"))
+            print(f"Picked up run_id={run_id} from {queue_name.decode('utf-8')}")
+
+            try: 
+                await run_executor_service(run_id)
+            except Exception as e: #generic exception for now
+                print(f"Failed to execute run_id={run_id} : {e}")
+        
+        except Exception as e: #generic exception for now
+            print(f"Worker loop error: {e}")
+            await asyncio.sleep(1)                        
+
+if __name__=="__main__":
+    asyncio.run(main())

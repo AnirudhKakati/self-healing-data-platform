@@ -5,6 +5,7 @@ from control_plane.app.services.pipeline_runs import get_pipeline_run_service, g
 from control_plane.app.schemas.pipeline_runs import PipelineRunResponse, PipelineRunStatusResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List
+from shared.redis_client import redis_client
 
 pipeline_runs_router=APIRouter()
 tenant_runs_router=APIRouter()
@@ -71,4 +72,10 @@ async def create_pipeline_run(tenant_id: int, pipeline_id: int, session: AsyncSe
     if not pipeline_run:
         raise HTTPException(status_code=404,detail="Pipeline not found. Please check the pipeline_id")
 
+    #push to redis
+    try:
+        await redis_client.rpush("pipeline_runs", str(pipeline_run.id))
+    except Exception: #generic exception for now
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail="Pipeline run was created, but failed to enqueue for execution.")
+    
     return pipeline_run
