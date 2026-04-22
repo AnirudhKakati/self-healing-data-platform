@@ -4,3 +4,4 @@ data-platform-env/
 .env
 *.egg-info/
 .vscode/
+data/
