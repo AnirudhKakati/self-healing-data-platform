@@ -13,3 +13,4 @@ class Tenant(Base):
 
     pipelines=relationship("Pipeline", back_populates="tenant", cascade="all, delete-orphan")
     pipeline_runs=relationship("PipelineRun", back_populates="tenant", cascade="all, delete-orphan")
+    agent_recommendations=relationship("AgentRecommendation",back_populates="tenant", cascade="all, delete-orphan")

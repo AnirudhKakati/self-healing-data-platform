@@ -17,3 +17,4 @@ class Pipeline(Base):
     steps=relationship("PipelineStep", back_populates="pipeline", cascade="all, delete-orphan")
     schedule=relationship("Schedule", back_populates="pipeline", uselist=False, cascade="all, delete-orphan") #one schedule belongs to one pipeline (so singular name)
     pipeline_runs=relationship("PipelineRun", back_populates="pipeline", cascade="all, delete-orphan")
+    agent_recommendations=relationship("AgentRecommendation",back_populates="pipeline", cascade="all, delete-orphan")

@@ -4,6 +4,7 @@ from control_plane.app.routes.pipelines import router as pipeline_router
 from control_plane.app.routes.pipeline_steps import router as pipeline_step_router
 from control_plane.app.routes.schedules import router as schedule_router
 from control_plane.app.routes.pipeline_runs import pipeline_runs_router, tenant_runs_router
+from control_plane.app.routes.agent_recommendations import run_recommendations_router, pipeline_recommendations_router, tenant_recommendations_router
 
 app=FastAPI()
 
@@ -23,3 +24,8 @@ app.include_router(schedule_router,prefix="/tenants/{tenant_id}/pipelines/{pipel
 #add the pipeline runs routes
 app.include_router(pipeline_runs_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs",tags=["Pipeline_runs"]) 
 app.include_router(tenant_runs_router,prefix="/tenants/{tenant_id}/runs",tags=["Tenant_pipeline_runs"]) 
+
+# add the agent recommendations routes
+app.include_router(run_recommendations_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs/{run_id}/recommendations",tags=["Run_agent_recommendations"])
+app.include_router(pipeline_recommendations_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/recommendations",tags=["Pipeline_agent_recommendations"])
+app.include_router(tenant_recommendations_router,prefix="/tenants/{tenant_id}/recommendations",tags=["Tenant_agent_recommendations"])
