@@ -54,7 +54,7 @@ async def get_all_pipeline_runs_for_tenant(tenant_id: int, session: AsyncSession
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error while fetching pipeline runs")
     
     if pipeline_runs is None: #needs 'is None' instead of 'not pipeline_runs' because None indicates pipeline was not found (atleast not for this tenant, or the tenant doesn't exist), 
-        # and an empty pipeline_runs list indicates 0 returned pipeline steps
+        # and an empty pipeline_runs list indicates 0 returned pipeline runs
         raise HTTPException(status_code=404,detail="Tenant not found. Please check the tenant_id")
     
     return pipeline_runs
