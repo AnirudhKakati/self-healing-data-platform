@@ -12,6 +12,7 @@ class Pipeline(Base):
     description: Mapped[str | None]=mapped_column(Text,nullable=True)
     created_at: Mapped[datetime]=mapped_column(server_default=func.now())
     is_active: Mapped[bool]=mapped_column(default=True, nullable=False)
+    callback_url: Mapped[str|None]=mapped_column(Text, nullable=True)
 
     tenant=relationship("Tenant", back_populates="pipelines")
     steps=relationship("PipelineStep", back_populates="pipeline", cascade="all, delete-orphan")
@@ -19,3 +20,4 @@ class Pipeline(Base):
     pipeline_runs=relationship("PipelineRun", back_populates="pipeline", cascade="all, delete-orphan")
     agent_recommendations=relationship("AgentRecommendation",back_populates="pipeline", cascade="all, delete-orphan")
     pipeline_circuit_breaker=relationship("PipelineCircuitBreaker", back_populates="pipeline", uselist=False, cascade="all, delete-orphan")
+    webhook_callbacks=relationship("WebhookCallback",back_populates="pipeline", cascade="all, delete-orphan")

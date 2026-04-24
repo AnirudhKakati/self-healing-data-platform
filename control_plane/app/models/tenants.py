@@ -15,3 +15,4 @@ class Tenant(Base):
     pipeline_runs=relationship("PipelineRun", back_populates="tenant", cascade="all, delete-orphan")
     agent_recommendations=relationship("AgentRecommendation",back_populates="tenant", cascade="all, delete-orphan")
     pipeline_circuit_breakers=relationship("PipelineCircuitBreaker", back_populates="tenant", cascade="all, delete-orphan")
+    webhook_callbacks=relationship("WebhookCallback",back_populates="tenant", cascade="all, delete-orphan")

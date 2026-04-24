@@ -7,12 +7,14 @@ from typing import Optional
 class PipelineCreate(BaseModel):
     name: str=Field(min_length=1, max_length=255)
     description: Optional[str]=None
+    callback_url: Optional[str]=None
 
 # Each pipeline belongs to a specific tenant and that CANNOT be updated
 class PipelineUpdate(BaseModel): #we can update the name, description and is_active status
     name: Optional[str]=Field(None, min_length=1, max_length=255)
     description: Optional[str]=None
     is_active: Optional[bool]=None
+    callback_url: Optional[str]=None
 
 class PipelineResponse(BaseModel):
     id: int
@@ -21,6 +23,7 @@ class PipelineResponse(BaseModel):
     description: Optional[str]
     created_at: datetime
     is_active: bool
+    callback_url: Optional[str]
 
     model_config={
         "from_attributes":True
