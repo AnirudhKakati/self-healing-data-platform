@@ -7,6 +7,7 @@ from control_plane.app.routes.pipeline_runs import pipeline_runs_router, tenant_
 from control_plane.app.routes.agent_recommendations import run_recommendations_router, pipeline_recommendations_router, tenant_recommendations_router
 from control_plane.app.routes.pipeline_circuit_breakers import pipeline_circuit_breakers_router, tenant_circuit_breakers_router
 from control_plane.app.routes.webhook_callbacks import run_callbacks_router, pipeline_callbacks_router, tenant_callbacks_router
+from control_plane.app.routes.api_keys import router as api_keys_router
 
 app=FastAPI()
 
@@ -40,3 +41,5 @@ app.include_router(tenant_circuit_breakers_router,prefix="/tenants/{tenant_id}/c
 app.include_router(run_callbacks_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs/{run_id}/callbacks",tags=["Run_webhook_callbacks"])
 app.include_router(pipeline_callbacks_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/callbacks",tags=["Pipeline_webhook_callbacks"])
 app.include_router(tenant_callbacks_router,prefix="/tenants/{tenant_id}/callbacks",tags=["Tenant_webhook_callbacks"])
+
+app.include_router(api_keys_router,prefix="/tenants/{tenant_id}/keys",tags=["API_keys"]) #add the api keys routes
