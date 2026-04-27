@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from control_plane.app.routes.tenants import router as tenant_router
 from control_plane.app.routes.pipelines import router as pipeline_router
 from control_plane.app.routes.pipeline_steps import router as pipeline_step_router
@@ -8,6 +8,7 @@ from control_plane.app.routes.agent_recommendations import run_recommendations_r
 from control_plane.app.routes.pipeline_circuit_breakers import pipeline_circuit_breakers_router, tenant_circuit_breakers_router
 from control_plane.app.routes.webhook_callbacks import run_callbacks_router, pipeline_callbacks_router, tenant_callbacks_router
 from control_plane.app.routes.api_keys import router as api_keys_router
+from control_plane.app.dependencies import verify_tenant
 
 app=FastAPI()
 
@@ -20,26 +21,26 @@ def get_health():
     return {"status": "healthy"}
 
 app.include_router(tenant_router,prefix="/tenants",tags=["Tenants"]) #add the tenants routes
-app.include_router(pipeline_router,prefix="/tenants/{tenant_id}/pipelines",tags=["Pipelines"]) #add the pipelines routes
-app.include_router(pipeline_step_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/steps",tags=["Pipeline_steps"]) #add the pipeline steps routes
-app.include_router(schedule_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/schedules",tags=["Schedules"]) #add the schedules routes
+app.include_router(pipeline_router,prefix="/tenants/{tenant_id}/pipelines",tags=["Pipelines"], dependencies=[Depends(verify_tenant)]) #add the pipelines routes
+app.include_router(pipeline_step_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/steps",tags=["Pipeline_steps"], dependencies=[Depends(verify_tenant)]) #add the pipeline steps routes
+app.include_router(schedule_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/schedules",tags=["Schedules"], dependencies=[Depends(verify_tenant)]) #add the schedules routes
 
 #add the pipeline runs routes
-app.include_router(pipeline_runs_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs",tags=["Pipeline_runs"]) 
-app.include_router(tenant_runs_router,prefix="/tenants/{tenant_id}/runs",tags=["Tenant_pipeline_runs"]) 
+app.include_router(pipeline_runs_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs",tags=["Pipeline_runs"], dependencies=[Depends(verify_tenant)]) 
+app.include_router(tenant_runs_router,prefix="/tenants/{tenant_id}/runs",tags=["Tenant_pipeline_runs"], dependencies=[Depends(verify_tenant)]) 
 
 # add the agent recommendations routes
-app.include_router(run_recommendations_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs/{run_id}/recommendations",tags=["Run_agent_recommendations"])
-app.include_router(pipeline_recommendations_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/recommendations",tags=["Pipeline_agent_recommendations"])
-app.include_router(tenant_recommendations_router,prefix="/tenants/{tenant_id}/recommendations",tags=["Tenant_agent_recommendations"])
+app.include_router(run_recommendations_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs/{run_id}/recommendations",tags=["Run_agent_recommendations"], dependencies=[Depends(verify_tenant)])
+app.include_router(pipeline_recommendations_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/recommendations",tags=["Pipeline_agent_recommendations"], dependencies=[Depends(verify_tenant)])
+app.include_router(tenant_recommendations_router,prefix="/tenants/{tenant_id}/recommendations",tags=["Tenant_agent_recommendations"], dependencies=[Depends(verify_tenant)])
 
 # add the pipeline circuit breaker routes
-app.include_router(pipeline_circuit_breakers_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/circuit_breakers",tags=["Pipeline_circuit_breakers"]) 
-app.include_router(tenant_circuit_breakers_router,prefix="/tenants/{tenant_id}/circuit_breakers",tags=["Tenant_circuit_breakers"]) 
+app.include_router(pipeline_circuit_breakers_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/circuit_breakers",tags=["Pipeline_circuit_breakers"], dependencies=[Depends(verify_tenant)]) 
+app.include_router(tenant_circuit_breakers_router,prefix="/tenants/{tenant_id}/circuit_breakers",tags=["Tenant_circuit_breakers"], dependencies=[Depends(verify_tenant)]) 
 
 # add the webhook callbacks routes
-app.include_router(run_callbacks_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs/{run_id}/callbacks",tags=["Run_webhook_callbacks"])
-app.include_router(pipeline_callbacks_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/callbacks",tags=["Pipeline_webhook_callbacks"])
-app.include_router(tenant_callbacks_router,prefix="/tenants/{tenant_id}/callbacks",tags=["Tenant_webhook_callbacks"])
+app.include_router(run_callbacks_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/runs/{run_id}/callbacks",tags=["Run_webhook_callbacks"], dependencies=[Depends(verify_tenant)])
+app.include_router(pipeline_callbacks_router,prefix="/tenants/{tenant_id}/pipelines/{pipeline_id}/callbacks",tags=["Pipeline_webhook_callbacks"], dependencies=[Depends(verify_tenant)])
+app.include_router(tenant_callbacks_router,prefix="/tenants/{tenant_id}/callbacks",tags=["Tenant_webhook_callbacks"], dependencies=[Depends(verify_tenant)])
 
-app.include_router(api_keys_router,prefix="/tenants/{tenant_id}/keys",tags=["API_keys"]) #add the api keys routes
+app.include_router(api_keys_router,prefix="/tenants/{tenant_id}/keys",tags=["API_keys"], dependencies=[Depends(verify_tenant)]) #add the api keys routes

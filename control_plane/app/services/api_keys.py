@@ -6,8 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import defer
 from sqlalchemy import select
 from shared.config import API_KEY_SECRET
-import hmac, hashlib
-import secrets
+from shared.utils import hash_api_key, generate_secure_key
 from datetime import datetime
 
 
@@ -81,13 +80,3 @@ async def revoke_api_key_service(tenant_id: int, key_id: int, session: AsyncSess
     except SQLAlchemyError:
         await session.rollback()
         raise
-
-#helper functions
-def hash_api_key(api_key: str, secret: str) -> str:
-    """Creates a SHA-256 HMAC hash of the API key."""
-    return hmac.new(secret.encode(), api_key.encode(), hashlib.sha256).hexdigest()
-
-def generate_secure_key(prefix: str="shdp", length: int=32) -> str:
-    """Generates a URL-safe API key with a prefix."""
-    random_part=secrets.token_urlsafe(length)
-    return f"{prefix}_{random_part}"

@@ -1,19 +1,36 @@
 from control_plane.app.models.tenants import Tenant
+from control_plane.app.models.api_keys import APIKey
 from control_plane.app.schemas.tenants import TenantCreate, TenantUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import delete, select
+from shared.config import API_KEY_SECRET
+from shared.utils import generate_secure_key, hash_api_key
 
 async def create_tenant_service(tenant_data: TenantCreate, session: AsyncSession):
     tenant_dict=tenant_data.model_dump() #converts the pydantic object to a plain dictionary
     tenant=Tenant(**tenant_dict) #SQLAlchemy constructors expect keyword arguments, so we need to unpack the dictionary with **
 
     try:
+        #first we try to create the tenant
         session.add(tenant) #this makes SQL track and prepare the object to insert it into the database
-        await session.commit() #this ensures the current transaction is finalized and changes are persited to the database. SQLAlchemy will issue the actual SQL insert.
-        await session.refresh(tenant) #because the DB generates certain fields, we wait for it to send the latest state to be reflected in the tenant object.
+        await session.flush() #flush sends the Tenant to the DB to get an ID WITHOUT committing the transaction yet
 
-        return tenant #we return this full object so we can send it in the Response later
+         #whenever a tenant is created, we also create an API key for it. The name is defaulted to 'primary'
+        api_key_dict={"name":"primary", "tenant_id": tenant.id}
+
+        raw_api_key=generate_secure_key() #create the actual API key
+        key_hash=hash_api_key(raw_api_key, API_KEY_SECRET) #create the key hash
+
+        api_key_dict["key_prefix"]=raw_api_key[:16]
+        api_key_dict["key_hash"]=key_hash
+        api_key=APIKey(**api_key_dict)
+
+        session.add(api_key)
+        await session.commit() #commit the whole session only after both operations run successfully
+        await session.refresh(tenant)
+        return tenant, raw_api_key #we return the tenant object, as well as the raw api key
+        
     except SQLAlchemyError:
         await session.rollback() #incase of any DB related errors, we roll back the session and raise the error
         raise
@@ -62,4 +79,3 @@ async def update_tenant_service(tenant_id: int, tenant_data: TenantUpdate, sessi
     except SQLAlchemyError: #if any DB error, we rollback
         await session.rollback()
         raise
-

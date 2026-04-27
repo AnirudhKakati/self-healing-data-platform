@@ -2,24 +2,28 @@ from fastapi import APIRouter, Depends, status, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from shared.db import get_db
 from control_plane.app.services.tenants import create_tenant_service, get_tenant_service, get_all_tenants_service, delete_tenant_service, update_tenant_service
-from control_plane.app.schemas.tenants import TenantCreate, TenantUpdate, TenantResponse
+from control_plane.app.schemas.tenants import TenantCreate, TenantUpdate, TenantResponse, TenantCreatedResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List
+from control_plane.app.dependencies import verify_admin
 
-router=APIRouter()
+router=APIRouter(dependencies=[Depends(verify_admin)])
 
 #CREATE TENANT
-@router.post("/", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=TenantCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(tenant_data: TenantCreate, session: AsyncSession = Depends(get_db)):
 
     try:
-        tenant=await create_tenant_service(tenant_data, session)
-        return tenant
+        tenant,raw_api_key=await create_tenant_service(tenant_data, session)
     
     except IntegrityError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail="Tenant could not be created because of a database constraint violation.")
     except SQLAlchemyError:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,detail="Database error while creating tenant.")
+    
+    base_response=TenantResponse.model_validate(tenant)
+    created_tenant=TenantCreatedResponse(**base_response.model_dump(),api_key=raw_api_key)
+    return created_tenant
 
 #GET TENANT BY ID
 @router.get("/{tenant_id}", response_model=TenantResponse)

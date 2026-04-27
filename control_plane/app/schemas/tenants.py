@@ -19,3 +19,6 @@ class TenantResponse(BaseModel):
     model_config={
         "from_attributes":True
     }
+
+class TenantCreatedResponse(TenantResponse):
+    api_key: str #full raw key, shown only once
