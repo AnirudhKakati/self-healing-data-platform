@@ -3,10 +3,9 @@ from urllib.parse import urlparse
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
-from worker.app.exceptions import IngestionStepError, ValidationStepError, TransformationStepError, LoadStepError, ObservabilityRecordingStepError
+from worker.app.exceptions import IngestionStepError, ValidationStepError, TransformationStepError, LoadStepError
 import operator
 from shared.db import dw_engine
-import json
 
 #step execution functions 
 async def run_ingestion(config, run_context):
@@ -177,26 +176,6 @@ async def run_load(config, run_context):
     run_context["load"]={"data_warehouse_table_name": table_name, "row_count": len(df), "column_count": len(df.columns)}
     print("Successfully completed load step")
 
-async def run_observability_recording(config, run_context):
-    print(f"Running Observability Recording with config: {config}")
-
-    run_id=run_context["run_id"]
-
-    #save in a local directory for now
-    run_dir=Path("data")/"runs"/str(run_id)
-    run_dir.mkdir(parents=True, exist_ok=True)
-
-    filename="run_context.json"
-    file_path=run_dir/filename
-
-    #save file
-    try:
-        with open(file_path,"w") as f:
-            json.dump(run_context, f, indent=4)
-    except Exception as e:
-        raise ObservabilityRecordingStepError(f"Failed to write {str(file_path)}: {e}")
-    print("Successfully completed observability recording step")
-
 #helper functions and mappings
 async def fetch_data(url: str):
     async with httpx.AsyncClient() as client:
@@ -208,8 +187,7 @@ async def fetch_data(url: str):
 step_registry={"ingestion":run_ingestion,
                "validation":run_validation,
                "transformation":run_transformation,
-               "load":run_load,
-               "observability_recording":run_observability_recording}
+               "load":run_load,}
 
 ops={">": operator.gt,
     "<": operator.lt,

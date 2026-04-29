@@ -22,6 +22,6 @@ class LoadStepError(Exception):
     """Raised when the load step fails"""
     pass
 
-class ObservabilityRecordingStepError(Exception):
+class ObservabilityRecordingError(Exception):
     """Raised when the observability recording step fails"""
     pass
