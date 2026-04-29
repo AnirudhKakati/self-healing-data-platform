@@ -1,13 +1,15 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
+
+StatusType=Literal["queued", "running", "retrying", "blocked", "success", "failed"]
 
 class PipelineRunResponse(BaseModel):
 
     id: int
     tenant_id: int
     pipeline_id: int
-    status: str
+    status: StatusType
     created_at: datetime
     started_at: Optional[datetime]
     updated_at: Optional[datetime]
@@ -23,7 +25,7 @@ class PipelineRunResponse(BaseModel):
 class PipelineRunStatusResponse(BaseModel):
     id: int
     pipeline_id: int
-    status: str
+    status: StatusType
     started_at: Optional[datetime]
     updated_at: Optional[datetime]
     ended_at: Optional[datetime]
