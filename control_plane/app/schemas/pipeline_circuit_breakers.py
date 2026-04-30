@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, Literal
 
@@ -14,11 +14,14 @@ class PipelineCircuitBreakerResponse(BaseModel):
     retry_after: Optional[datetime]
     created_at: datetime
     updated_at: Optional[datetime]
+    failure_count_threshold: int=Field(ge=1)
+    failure_window_minutes: int=Field(ge=1)
 
     model_config = {
         "from_attributes": True
     }
 
 class PipelineCircuitBreakerUpdate(BaseModel): 
-    state: StateType
-    
+    state: Optional[StateType]=None
+    failure_count_threshold: Optional[int]=Field(None,ge=1)
+    failure_window_minutes: Optional[int]=Field(None,ge=1)

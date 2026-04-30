@@ -41,11 +41,17 @@ async def update_pipeline_circuit_breaker_service(tenant_id: int, pipeline_id: i
     if not pipeline_circuit_breaker:
         return None
     
+    update_dict=breaker_data.model_dump(exclude_unset=True)
+    if not update_dict:
+        raise ValueError("No fields were provided for update.")
+
     try:
-        pipeline_circuit_breaker.state=breaker_data.state
+        for key, value in update_dict.items():
+            setattr(pipeline_circuit_breaker, key, value)
+
         pipeline_circuit_breaker.updated_at=datetime.now().replace(tzinfo=None)
         
-        if breaker_data.state=="closed": #closed circuit indicates no failures, so we clear these fields
+        if breaker_data.state and breaker_data.state=="closed": #closed circuit indicates no failures, so we clear these fields
             pipeline_circuit_breaker.failure_reason=None
             pipeline_circuit_breaker.retry_after=None
 

@@ -1,5 +1,6 @@
 from control_plane.app.models.tenants import Tenant
 from control_plane.app.models.pipelines import Pipeline
+from control_plane.app.models.pipeline_circuit_breakers import PipelineCircuitBreaker
 from control_plane.app.schemas.pipelines import PipelineCreate, PipelineUpdate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,8 +17,17 @@ async def create_pipeline_service(tenant_id: int, pipeline_data: PipelineCreate,
     pipeline=Pipeline(**pipeline_dict) #SQLAlchemy constructors expect keyword arguments, so we need to unpack the dictionary with **
 
     try:
+        #first we try to create the pipeline
         session.add(pipeline) #this makes SQL track and prepare the object to insert it into the database
-        await session.commit() #this ensures the current transaction is finalized and changes are persited to the database. SQLAlchemy will issue the actual SQL insert.
+        await session.flush() #flush sends the Pipeline to the DB to get an ID WITHOUT committing the transaction yet
+
+        #whenever a pipeline is created, we also create a circuit breaker record for it. The circuit state is defaulted to 'closed'.
+        pipeline_circuit_breaker_dict={"pipeline_id":pipeline.id,"tenant_id":pipeline.tenant_id}
+
+        pipeline_circuit_breaker=PipelineCircuitBreaker(**pipeline_circuit_breaker_dict)
+        session.add(pipeline_circuit_breaker)
+
+        await session.commit() #commit the whole session only after both operations run successfully
         await session.refresh(pipeline) #because the DB generates certain fields, we wait for it to send the latest state to be reflected in the pipeline object.
 
         return pipeline #we return this full object so we can send it in the Response later
