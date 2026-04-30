@@ -14,7 +14,7 @@ class PipelineStepCreate(BaseModel):
 #step_type and step_order are updatable in case the user wants to reorder steps or change what a step does
 #each step belongs to a specific pipeline and that cannot be changed
 class PipelineStepUpdate(BaseModel):
-    step_type: Optional[StepType]
+    step_type: Optional[StepType]=None
     step_order: Optional[int]=Field(None, ge=1)
     config: Optional[dict]=None
     is_active: Optional[bool]=None
