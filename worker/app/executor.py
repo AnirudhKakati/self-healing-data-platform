@@ -1,10 +1,10 @@
 from shared.db import async_session
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import select,update
+from sqlalchemy import select, update, func
 from control_plane.app.models.pipeline_runs import PipelineRun
 from control_plane.app.models.pipeline_steps import PipelineStep
 from control_plane.app.models.pipeline_circuit_breakers import PipelineCircuitBreaker
-from datetime import datetime
+from datetime import datetime, timedelta
 from worker.app.exceptions import InvalidPipelineRunStatus, UnknownStepTypeError, ObservabilityRecordingError
 from worker.app.step_handlers import step_registry
 import asyncio
@@ -159,6 +159,23 @@ async def run_executor_service(run_id: int):
 
             run_context["run_status"]="success"
 
+            #on a successful run, if the circuit breaker state was half-open, we mark it as closed.
+            try:
+                result=await session.execute(select(PipelineCircuitBreaker).where(PipelineCircuitBreaker.pipeline_id==pipeline_id))
+                pipeline_circuit_breaker=result.scalar_one_or_none()
+                if pipeline_circuit_breaker and pipeline_circuit_breaker.state=="half-open":
+                    pipeline_circuit_breaker.state='closed'
+                    #closed circuit indicates no failures, so we clear these fields
+                    pipeline_circuit_breaker.failure_reason=None
+                    pipeline_circuit_breaker.retry_after=None
+                    pipeline_circuit_breaker.updated_at=now_naive()
+                    await session.commit()
+                    await session.refresh(pipeline_circuit_breaker)
+
+            except Exception as inner_e:
+                await session.rollback()
+                print(f"Failed to update pipeline circuit breaker state : {inner_e}")
+                
             return pipeline_run
 
         except Exception as e:  #capture step failures and persist run failure details
@@ -187,6 +204,43 @@ async def run_executor_service(run_id: int):
                 #worst case: log it, but don’t mask original error
                 await session.rollback()
                 print(f"Failed to update run as failed: {inner_e}")
+
+            #now check if the pipeline circuit breaker state needs to be updated
+            try:
+                result=await session.execute(select(PipelineCircuitBreaker).where(PipelineCircuitBreaker.pipeline_id==pipeline_id))
+                pipeline_circuit_breaker=result.scalar_one_or_none()
+                if pipeline_circuit_breaker:
+                    #we get the failure_count_threshold and the failure_window_minutes for this pipeline
+                    failure_count_threshold=pipeline_circuit_breaker.failure_count_threshold
+                    failure_window_minutes=pipeline_circuit_breaker.failure_window_minutes
+
+                    current_time=now_naive()
+                    failure_reason=f"Error Type:{type(e).__name__} Error message: {str(e)}"
+                    
+                    #first check if the circuit state was half-open. If it was half-open we immediately mark the circuit state as open
+                    if pipeline_circuit_breaker.state=="half-open":
+                        mark_circuit_breaker_open(pipeline_circuit_breaker,failure_reason,current_time+timedelta(minutes=failure_window_minutes))
+                        await session.commit()
+                        await session.refresh(pipeline_circuit_breaker)
+                        
+                    elif pipeline_circuit_breaker.state=="closed": #the circuit state was closed so we check the failure threshold
+
+                        #we get the count of failed runs within the failure window and see if it exceeds the threshold
+                        window_start=current_time-timedelta(minutes=failure_window_minutes)
+                        result=await session.execute(select(func.count()).select_from(PipelineRun).where(PipelineRun.pipeline_id==pipeline_id, PipelineRun.status=='failed', PipelineRun.ended_at>=window_start))
+                        failed_runs_count=result.scalar_one()
+                        
+                        if failed_runs_count>=failure_count_threshold: #if count exceeds the threshold we mark the circuit breaker state as open
+                            mark_circuit_breaker_open(pipeline_circuit_breaker,failure_reason,current_time+timedelta(minutes=failure_window_minutes))
+                            await session.commit()
+                            await session.refresh(pipeline_circuit_breaker)
+                    #we do elif and explicitly check if state==close rather than doing an 'else' block because another run could have already marked 
+                    # this pipeline circuit breaker as open while this run was executing so we would be opening a circuit which was already open and do
+                    # wasteful work. So we avoid that 
+
+            except Exception as inner_e:
+                await session.rollback()
+                print(f"Failed to update pipeline circuit breaker state : {inner_e}")
 
             raise #re-raise original error
         finally:
@@ -221,6 +275,7 @@ async def run_observability_recording(run_context):
 def now_naive():
     # helper function to get current timezone-naive time
     return datetime.now().replace(tzinfo=None)
+
 def calculate_delay(strategy, base_delay, attempt):
     #helper function to calculate the delay based on retry strategy
     if strategy=="exponential_backoff":
@@ -233,3 +288,10 @@ def calculate_delay(strategy, base_delay, attempt):
     else:
         print("No known retry strategy provided")
         return base_delay
+    
+def mark_circuit_breaker_open(pipeline_circuit_breaker, failure_reason, retry_after):
+    #helper function to mark pipeline circuit breaker state as open
+    pipeline_circuit_breaker.state='open'
+    pipeline_circuit_breaker.failure_reason=failure_reason
+    pipeline_circuit_breaker.retry_after=retry_after
+    pipeline_circuit_breaker.updated_at=now_naive()
