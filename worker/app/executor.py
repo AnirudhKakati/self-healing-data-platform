@@ -1,12 +1,15 @@
 from shared.db import async_session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select, update, func
+from control_plane.app.models.pipelines import Pipeline
 from control_plane.app.models.pipeline_runs import PipelineRun
 from control_plane.app.models.pipeline_steps import PipelineStep
 from control_plane.app.models.pipeline_circuit_breakers import PipelineCircuitBreaker
-from datetime import datetime, timedelta
+from datetime import timedelta
 from worker.app.exceptions import InvalidPipelineRunStatus, UnknownStepTypeError, ObservabilityRecordingError
 from worker.app.step_handlers import step_registry
+from shared.utils import now_naive
+from shared.webhook_dispatcher import dispatch_webhook_callback
 import asyncio
 import random
 from pathlib import Path
@@ -82,16 +85,16 @@ async def run_executor_service(run_id: int):
         
         current_step_type=None
         try:
-            #fetch pipeline steps of this pipeline
-            #use pipeline_run.pipeline_id from the fresh re-fetch after claiming the run
-            result=await session.execute(select(PipelineStep).where(PipelineStep.pipeline_id==pipeline_run.pipeline_id).order_by(PipelineStep.step_order))
-            pipeline_steps=result.scalars().all()
-
             #this shared dictionary is passed between steps.
             #earlier steps can write values here, and later steps can read them.
             run_context={"run_id":run_id, "pipeline_id": pipeline_run.pipeline_id, 
                          "tenant_id":pipeline_run.tenant_id, "retry_count": 0} #will be built dynamically during execution
             
+            #fetch pipeline steps of this pipeline
+            #use pipeline_run.pipeline_id from the fresh re-fetch after claiming the run
+            result=await session.execute(select(PipelineStep).where(PipelineStep.pipeline_id==pipeline_run.pipeline_id).order_by(PipelineStep.step_order))
+            pipeline_steps=result.scalars().all()
+
             for step in pipeline_steps:
                 current_step_type=step.step_type
                 config=step.config or {}
@@ -191,7 +194,7 @@ async def run_executor_service(run_id: int):
                 pipeline_run=result.scalar_one_or_none()
 
                 if pipeline_run:
-                    now=datetime.now().replace(tzinfo=None)
+                    now=now_naive()
                     pipeline_run.status="failed"
                     pipeline_run.ended_at=now
                     pipeline_run.updated_at=now
@@ -250,6 +253,19 @@ async def run_executor_service(run_id: int):
             except ObservabilityRecordingError as e: #if observability recording fails, we just log it. We dont want it to overwrite the errors in the actual pipeline run
                 print(f"Failed to write observability recording: {e}")
 
+            #next, send webhook callback
+            #so first try to fetch the callback_url for the pipeline
+            try:
+                result=await session.execute(select(Pipeline).where(Pipeline.id==pipeline_run.pipeline_id))
+                pipeline=result.scalar_one_or_none()
+                if pipeline and pipeline.callback_url: #check if we have a callback url for this pipeline
+                    asyncio.create_task(dispatch_webhook_callback(pipeline.callback_url, run_id, pipeline_run.pipeline_id, pipeline_run.tenant_id, run_context["run_status"]))
+                    
+            except SQLAlchemyError:
+                await session.rollback()
+                print(f"Failed to fetch pipeline callback_url")
+            
+
 async def run_observability_recording(run_context):
     print(f"Running Observability Recording")
 
@@ -272,10 +288,6 @@ async def run_observability_recording(run_context):
 
 
 #helper functions
-def now_naive():
-    # helper function to get current timezone-naive time
-    return datetime.now().replace(tzinfo=None)
-
 def calculate_delay(strategy, base_delay, attempt):
     #helper function to calculate the delay based on retry strategy
     if strategy=="exponential_backoff":
