@@ -259,6 +259,7 @@ async def run_executor_service(run_id: int):
             #the agent function is internally fully defensive — it catches all its own errors and returns None on any failure, so this await can never break the executor.
             recommendation_id=None
             try:
+                print("Running Diagnostic Layer")
                 from worker.app.agent.diagnostic_agent import run_diagnostic_agent  
                 #the import is INSIDE the try block to keep the executor importable even if langchain-google-genai
                 #is missing or misconfigured. Failing to start the worker because the agent dependency is broken
