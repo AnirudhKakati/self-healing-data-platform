@@ -253,13 +253,29 @@ async def run_executor_service(run_id: int):
             except ObservabilityRecordingError as e: #if observability recording fails, we just log it. We dont want it to overwrite the errors in the actual pipeline run
                 print(f"Failed to write observability recording: {e}")
 
-            #next, send webhook callback
+            #invoke the diagnostic agent if the run failed.
+            #we AWAIT this (unlike webhook dispatch which is fire-and-forget) because the webhook payload needs the resulting recommendation_id to populate recommendations_url. 
+            # running these in parallel would mean the webhook fires before the recommendation exists in the DB, making the URL useless.
+            #the agent function is internally fully defensive — it catches all its own errors and returns None on any failure, so this await can never break the executor.
+            recommendation_id=None
+            try:
+                from worker.app.agent.diagnostic_agent import run_diagnostic_agent  
+                #the import is INSIDE the try block to keep the executor importable even if langchain-google-genai
+                #is missing or misconfigured. Failing to start the worker because the agent dependency is broken
+                #would be a much worse outcome than failing to produce a recommendation for one run.
+                recommendation_id=await run_diagnostic_agent(run_context)
+            except Exception as e:
+                print(f"Failed to run diagnostic agent: {e}")
+
+            #next, send webhook callback. now passes recommendation_id (may be None) so the payload
+            #can include a real recommendations_url when one was produced.
             #so first try to fetch the callback_url for the pipeline
             try:
                 result=await session.execute(select(Pipeline).where(Pipeline.id==pipeline_run.pipeline_id))
                 pipeline=result.scalar_one_or_none()
                 if pipeline and pipeline.callback_url: #check if we have a callback url for this pipeline
-                    asyncio.create_task(dispatch_webhook_callback(pipeline.callback_url, run_id, pipeline_run.pipeline_id, pipeline_run.tenant_id, run_context["run_status"]))
+                    asyncio.create_task(dispatch_webhook_callback(pipeline.callback_url, run_id, pipeline_run.pipeline_id, pipeline_run.tenant_id, run_context["run_status"],
+                                                                  recommendation_id)) #new parameter: None when no recommendation id is produced
                     
             except SQLAlchemyError:
                 await session.rollback()

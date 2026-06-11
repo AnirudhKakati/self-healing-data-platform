@@ -10,3 +10,5 @@ ENV=os.getenv("ENV", "dev")
 DATA_WAREHOUSE_URL=os.getenv("DATA_WAREHOUSE_URL") #local data warehouse url (2nd DB on postgres)
 API_KEY_SECRET=os.getenv("API_KEY_SECRET")
 ADMIN_SECRET_KEY=os.getenv("ADMIN_SECRET_KEY")
+GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY")
+GEMINI_MODEL=os.getenv("GEMINI_MODEL", "gemini-2.5-flash") #default to flash if not set — keeps things working even if env is misconfigured
