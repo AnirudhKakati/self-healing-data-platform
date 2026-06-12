@@ -16,6 +16,7 @@ from control_plane.app.models.agent_recommendations import AgentRecommendation
 from control_plane.app.models.pipeline_circuit_breakers import PipelineCircuitBreaker
 from control_plane.app.models.webhook_callbacks import WebhookCallback
 from control_plane.app.models.api_keys import APIKey
+from control_plane.app.models.incident_embeddings import IncidentEmbedding
 
 from shared.config import DATABASE_URL_SYNC
 

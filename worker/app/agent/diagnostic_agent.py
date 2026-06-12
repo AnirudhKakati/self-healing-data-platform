@@ -6,6 +6,9 @@ from shared.db import async_session
 from control_plane.app.models.agent_recommendations import AgentRecommendation
 from worker.app.agent.state import DiagnosticState
 from worker.app.agent.nodes import (log_analysis_node,classification_node,recovery_planning_node,)
+from worker.app.agent.retrieval_node import retrieval_node
+import asyncio
+from worker.app.agent.index_incident import index_incident
 
 # ============================================================================
 # Graph construction — happens ONCE at module load, same lifetime pattern as
@@ -30,6 +33,7 @@ def _build_graph():
     #when wiring edges below — keep them stable, they show up in logs and traces.
     graph.add_node("log_analysis", log_analysis_node)
     graph.add_node("classification", classification_node)
+    graph.add_node("retrieval", retrieval_node)
     graph.add_node("recovery_planning", recovery_planning_node)
 
     #entry point: the graph starts here when invoked.
@@ -37,7 +41,8 @@ def _build_graph():
 
     #linear edges. Each node's output flows into the next node's state.
     graph.add_edge("log_analysis", "classification")
-    graph.add_edge("classification", "recovery_planning")
+    graph.add_edge("classification", "retrieval")
+    graph.add_edge("retrieval", "recovery_planning")
     graph.add_edge("recovery_planning", END)
 
     #MemorySaver per our design call — in-process checkpointing, lost on restart.
@@ -112,6 +117,7 @@ async def run_diagnostic_agent(run_context: dict) -> int | None:
         "run_context_json": run_context_json,
         "log_analysis": None,
         "classification": None,
+        "retrieved_context": [],
         "recovery_plan": None,
     }
 
@@ -161,6 +167,14 @@ async def run_diagnostic_agent(run_context: dict) -> int | None:
             session.add(recommendation)
             await session.commit()
             await session.refresh(recommendation)
+
+            #fire-and-forget incident indexing. Same pattern as the webhook dispatcher in the executor —
+            #the indexing happens in the background; the agent returns the recommendation_id immediately
+            #so the executor's webhook payload can use it. If indexing fails, it's logged but doesn't
+            #affect this run's response.
+            asyncio.create_task(index_incident(run_context=run_context,recommendation_id=recommendation.id,failure_classification=classification.failure_classification,
+                                               recommended_action=recovery_plan.recommended_action,explanation=recovery_plan.explanation))
+
             print(f"Agent: wrote recommendation_id={recommendation.id} for run_id={run_id} "
                   f"({classification.failure_classification} → {recovery_plan.recommended_action})")
             return recommendation.id

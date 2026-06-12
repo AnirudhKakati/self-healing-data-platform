@@ -1,4 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate
+from worker.app.agent.state import RetrievedChunk
 
 #we keep the prompt as a module-level constant rather than embedding it inside the agent function because:
 #1. Prompts evolve constantly during development — easier to iterate on one in isolation
@@ -163,12 +164,46 @@ classification_prompt=ChatPromptTemplate.from_messages([("system", CLASSIFICATIO
 
 # ---- Recovery Planning node prompts ----
 
-RECOVERY_PLANNING_SYSTEM_PROMPT="""You are a data pipeline recovery planner. Your job is to recommend a concrete recovery action based on the log analysis and failure classification produced by other specialists.
+#design note on the retrieved context block:
+#we render the retrieved chunks into prompt text via render_retrieved_context() below rather than passing the list of Pydantic objects directly. Two reasons:
+#1. ChatPromptTemplate's variable interpolation expects strings, not structured objects — even if we passed an object the template would just call str() on it, giving ugly default repr output
+#2. Doing the rendering in Python keeps prompt formatting concerns out of LangChain's internals — we control the exact text the LLM sees
+#
+#the rendered block has explicit numbering ([1], [2], ...) and shows the source_ref + similarity score for each chunk. This is what gives the LLM a stable way to cite sources by reference handle in its explanation field.
+#the empty-context case gets its own placeholder text (not an empty string) so the LLM has explicit framing for "nothing retrieved" rather than guessing what an empty variable means.
+
+def render_retrieved_context(chunks: list[RetrievedChunk]) -> str:
+    """Render a list of RetrievedChunk into the prompt text block.
+
+    Output shape (when chunks is non-empty):
+        [1] runbook (network.md#examples, similarity=0.87):
+        <chunk_text>
+
+        [2] past_run (run_id=42, similarity=0.71):
+        <chunk_text>
+
+    When chunks is empty (cold start or retrieval failure), we return an explicit placeholder string. This is important — passing empty string would leave the prompt section visually blank,
+    which LLMs can interpret as "I should make something up." The explicit placeholder framing prevents that.
+    """
+    if not chunks:
+        return "No relevant prior incidents or runbooks were retrieved for this failure."
+
+    rendered_chunks=[]
+    for i, chunk in enumerate(chunks, start=1):
+        #similarity formatted to 2 decimals — enough precision for the LLM to weight chunks against each other, not so much that it over-anchors on tiny differences
+        header=f"[{i}] {chunk.source_type} ({chunk.source_ref}, similarity={chunk.similarity_score:.2f}):"
+        rendered_chunks.append(f"{header}\n{chunk.chunk_text}")
+    
+    return "\n\n".join(rendered_chunks) #double newlines between chunks for visual separation in the prompt — easier for the LLM to parse boundaries between items.
+
+
+RECOVERY_PLANNING_SYSTEM_PROMPT="""You are a data pipeline recovery planner. Your job is to recommend a concrete recovery action based on the log analysis and failure classification produced by other specialists, grounded in retrieved operational knowledge and prior incidents.
 
 You will be given:
 - The original error type and message
 - The log analysis output (failed step, attempt pattern, error interpretation, notable signals)
 - The classification output (failure_classification, confidence, reasoning)
+- A block of retrieved context: runbook excerpts and prior incidents from the knowledge base, ordered by relevance
 
 Your job is to:
 1. Recommend EXACTLY ONE recovery action:
@@ -179,7 +214,12 @@ Your job is to:
    - escalate: human intervention required — for unknown failures, low classification confidence, or unrecoverable errors
    - pause_schedule: stop scheduled runs for this pipeline until investigation — for repeated failures or systemic issues
    
-2. Write a prose explanation that weaves together the log analysis, classification, and your recovery reasoning. Reference specific evidence (failed step, error type, classification, attempt pattern). This is what a human operator will read.
+2. Write a prose explanation that weaves together the log analysis, classification, retrieved context, and your recovery reasoning. Reference specific evidence (failed step, error type, classification, attempt pattern). This is what a human operator will read.
+
+GROUNDING IN RETRIEVED CONTEXT:
+- When the retrieved context is relevant, ground your recommendation in it and cite specific sources by their reference handle in your explanation (e.g. "per network.md#examples" or "similar to run_id=42").
+- If the retrieved context is empty or not relevant to this failure, proceed using the upstream classification and reasoning alone, and note in your explanation that no prior context was available.
+- Do not fabricate citations. Only cite source_refs that appear in the retrieved context block. Inventing plausible-looking citations is a critical error.
 
 CRITICAL CONSTRAINTS:
 - If the classification is 'unknown' or confidence is below 0.5, lean strongly toward 'escalate'.
@@ -204,6 +244,9 @@ Classification output:
 - Failure classification: {failure_classification}
 - Confidence: {confidence}
 - Reasoning: {reasoning}
+
+Retrieved context (runbooks and prior incidents, most relevant first):
+{retrieved_context_block}
 
 Produce your structured recovery plan."""
 

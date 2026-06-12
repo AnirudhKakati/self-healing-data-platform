@@ -12,3 +12,4 @@ API_KEY_SECRET=os.getenv("API_KEY_SECRET")
 ADMIN_SECRET_KEY=os.getenv("ADMIN_SECRET_KEY")
 GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY")
 GEMINI_MODEL=os.getenv("GEMINI_MODEL", "gemini-2.5-flash") #default to flash if not set — keeps things working even if env is misconfigured
+GEMINI_EMBEDDING_MODEL=os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001") #defaults to gemini-embedding-001

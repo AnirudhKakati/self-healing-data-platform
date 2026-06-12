@@ -2,7 +2,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from shared.config import GOOGLE_API_KEY, GEMINI_MODEL
 from worker.app.agent.state import (DiagnosticState,log_analysis_sentinel,classification_sentinel,recovery_plan_sentinel,)
 from worker.app.agent.schemas import (LogAnalysisOutput,ClassificationOutput,RecoveryPlanOutput,)
-from worker.app.agent.prompts import (log_analysis_prompt,classification_prompt,recovery_planning_prompt,)
+from worker.app.agent.prompts import (log_analysis_prompt,classification_prompt,recovery_planning_prompt,render_retrieved_context,)
 
 #one shared LLM client at module load, same reasoning as the legacy diagnostic_agent.py:
 #the client is stateless and thread-safe, so reusing the same instance avoids re-authentication overhead on every invocation. temperature=0 keeps outputs deterministic for a given input,
@@ -120,6 +120,7 @@ async def recovery_planning_node(state: DiagnosticState) -> dict:
         return {"recovery_plan": recovery_plan_sentinel()}
 
     try:
+        retrieved_context_block=render_retrieved_context(state["retrieved_context"])
         result: RecoveryPlanOutput=await _recovery_planning_chain.ainvoke({
             "error_type": state["error_type"],
             "error_message": state["error_message"],
@@ -130,6 +131,7 @@ async def recovery_planning_node(state: DiagnosticState) -> dict:
             "failure_classification": classification.failure_classification,
             "confidence": classification.confidence,
             "reasoning": classification.reasoning,
+            "retrieved_context_block": retrieved_context_block,
         })
         print(f"Agent[recovery_planning]: completed for run_id={run_id} — recommended_action={result.recommended_action}")
         return {"recovery_plan": result}

@@ -1,4 +1,5 @@
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional, List, Literal
+from pydantic import BaseModel, Field
 from worker.app.agent.schemas import (LogAnalysisOutput,ClassificationOutput,RecoveryPlanOutput,)
 
 #why TypedDict and not Pydantic for the graph state:
@@ -6,18 +7,34 @@ from worker.app.agent.schemas import (LogAnalysisOutput,ClassificationOutput,Rec
 #LangGraph's state-merging semantics work with TypedDict natively. Switching to a Pydantic model would add a layer of wrapping for no real benefit at this scale.
 #The individual node OUTPUTS stay as Pydantic models (above) because with_structured_output() needs them but those outputs are then stored INSIDE the TypedDict state.
 
+
+# ============================================================================
+# RetrievedChunk lives here rather than in schemas.py because it's a state-shape
+# concern, not an LLM-output concern. schemas.py holds the structured outputs
+# we constrain Gemini to produce; RetrievedChunk is what our deterministic
+# retrieval_node produces from pgvector and writes into state.
+# Keeping it next to DiagnosticState makes the coupling visible.
+# ============================================================================
+
+class RetrievedChunk(BaseModel):
+    """One row of retrieved context from the incident_embeddings table.
+
+    Written by retrieval_node, read by recovery_planning_node. The node renders these into a numbered list in the Recovery Planning prompt, and the LLM is instructed to cite them by source_ref in its explanation.
+    """
+    source_type: Literal["past_run", "past_recommendation", "runbook"]=Field(description="Which kind of source produced this chunk. The Recovery Planning prompt uses this to weight or contextualize the citation — "
+                    "runbook chunks are operational knowledge, past_run/past_recommendation chunks are tenant-specific history.")
+    source_ref: str=Field(description="Citation handle. For runbooks, this is 'filename.md#section'. For incidents, 'run_id=N' or 'rec_id=N'. The agent uses this string verbatim when citing sources in its explanation field.")
+    chunk_text: str=Field(description="The exact text that was embedded. Passed through to the LLM so it can reason over the content, not just the citation.")
+    similarity_score: float=Field(description="Converted from pgvector's cosine distance via (1 - distance). Higher = more similar. We convert in the retrieval node so this field is uniformly intuitive everywhere downstream.",
+                    ge=-1.0, le=1.0,)
+    
 class DiagnosticState(TypedDict):
     """The state object that flows through the LangGraph diagnostic graph.
 
-    Input fields are populated once at graph entry and never modified.
-    Output fields are populated by their respective nodes — each field is
-    written by exactly one node, so no reducer functions are needed.
+    Input fields are populated once at graph entry and never modified. Output fields are populated by their respective nodes — each field is written by exactly one node, so no reducer functions are needed.
 
-    All three output fields are Optional because the graph builds them
-    incrementally: when the graph starts, all three are None; after
-    log_analysis runs, only log_analysis is populated; etc. By the time
-    the graph reaches END, all three should be populated (with real
-    outputs OR sentinels — see SENTINEL constants below).
+    All output fields except retrieved_context are Optional because the graph builds them incrementally: when the graph starts, they're None; after their node runs, they're populated.
+    retrieved_context is the exception — it defaults to [] not None, so downstream code (Recovery Planning) handles "no retrieved context" uniformly whether retrieval succeeded with zero hits or failed entirely. Less branching, same observable behavior.
     """
 
     # ---- inputs (set once at graph entry) ----
@@ -33,6 +50,9 @@ class DiagnosticState(TypedDict):
     # ---- accumulated outputs (populated by nodes) ----
     log_analysis: Optional[LogAnalysisOutput]
     classification: Optional[ClassificationOutput]
+    #retrieved_context is populated by the new retrieval_node (between classification and recovery_planning).
+    #empty list = no relevant context found OR retrieval failed. Recovery Planning handles both the same way.
+    retrieved_context: List[RetrievedChunk]
     recovery_plan: Optional[RecoveryPlanOutput]
 
 
